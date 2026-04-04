@@ -1,0 +1,528 @@
+---
+services:
+  # --- Docker Socket Proxy (Security Best Practice) ---
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy
+    container_name: socket-proxy
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - CONTAINERS=1 # Allow Traefik to discover containers
+      - EVENTS=1     # Allow Traefik to receive real-time container events
+      - IMAGES=1     # Allow Watchtower to pull images
+      - POST=1       # Allow Watchtower to restart containers
+      - AUTH=1       # Allow Watchtower to authenticate with registries
+    networks:
+      - socket_proxy_network
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.25'
+
+  # --- Reverse Proxy (Traefik v3) ---
+  traefik:
+    image: traefik:v3.3
+    container_name: traefik
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.endpoint=tcp://socket-proxy:2375"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=mediaserver_media_network"
+      - "--entryPoints.web.address=:80"
+      - "--entryPoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.dnschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.dnschallenge.provider=cloudflare"
+      - "--certificatesresolvers.myresolver.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53"
+      - "--certificatesresolvers.myresolver.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+      - "--api.dashboard=true"
+      - "--ping=true"
+      - "--accesslog=true"
+      - "--accesslog.filepath=/logs/access.log"
+      - "--accesslog.filters.statuscodes=400-599"
+      - "--providers.file.filename=/etc/traefik/dynamic.yml"
+    environment:
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /opt/docker/traefik/letsencrypt:/letsencrypt
+      - /opt/docker/traefik/logs:/logs
+      - /opt/docker/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+    networks:
+      - media_network
+      - socket_proxy_network
+    depends_on:
+      - socket-proxy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '1'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.api.entrypoints=web"
+      - "traefik.http.routers.api.service=api@internal"
+      - "traefik.http.routers.api.middlewares=security-headers@file"
+      # Security headers middleware is defined in /opt/docker/traefik/dynamic.yml
+
+  # --- Cloudflare Tunnel ---
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - media_network
+    depends_on:
+      - traefik
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
+
+  # --- Auto-Updater (Watchtower) ---
+  watchtower:
+    image: nickfedor/watchtower
+    container_name: watchtower
+    environment:
+      - WATCHTOWER_CLEANUP=true           # Removes old images after update
+      - WATCHTOWER_SCHEDULE=0 0 16 * * *  # Run at 3am AEDT (16:00 UTC)
+      - DOCKER_HOST=tcp://socket-proxy:2375
+    networks:
+      - socket_proxy_network
+      - media_network
+    depends_on:
+      - socket-proxy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
+
+  # --- VPN (Gluetun) ---
+  gluetun:
+    image: qmcgaw/gluetun
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - VPN_SERVICE_PROVIDER=private internet access
+      - VPN_TYPE=openvpn
+      - OPENVPN_USER=${VPN_USER}
+      - OPENVPN_PASSWORD=${VPN_PASSWORD}
+      - SERVER_REGIONS=${VPN_REGION}
+      - VPN_PORT_FORWARDING=on
+      - TZ=${TZ}
+      - FIREWALL_OUTBOUND_SUBNETS=172.16.0.0/12,192.168.0.0/16 # Allow local network traffic
+      - DOT=off                              # Disable DNS over TLS to speed up DNS resolution
+      - DNS_PLAINTEXT_ADDRESS=1.1.1.1        # Use Cloudflare DNS as upstream when DOT is off
+      - HEALTH_VPN_DURATION_INITIAL=30s      # Give VPN 30s to stabilise before health checks
+      - HEALTH_VPN_DURATION_ADDITION=10s     # Allow 10s extra per subsequent check
+    ports:
+      - 8080:8080   # qBittorrent Web UI
+      - 6881:6881   # Torrent Port TCP
+      - 6881:6881/udp # Torrent Port UDP
+    volumes:
+      - /opt/docker/gluetun:/gluetun # Persists VPN state across rebuilds
+    networks:
+      - media_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9999 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '1'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.qbittorrent.rule=Host(`qbittorrent.${DOMAIN}`)"
+      - "traefik.http.routers.qbittorrent.entrypoints=websecure"
+      - "traefik.http.routers.qbittorrent.tls=true"
+      - "traefik.http.routers.qbittorrent.tls.certresolver=myresolver"
+      - "traefik.http.routers.qbittorrent.middlewares=security-headers@file,local-access@docker"
+      - "traefik.http.middlewares.local-access.ipAllowList.sourceRange=${LOCAL_SUBNET},${SERVER_IP}/32"
+      - "traefik.http.services.qbittorrent.loadbalancer.server.port=8080"
+
+  # --- Media Server ---
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - ADVERTISE_IP=https://${SERVER_IP}:32400
+    volumes:
+      - /opt/docker/plex:/config
+      - ${ROOT_MEDIA_DIR}:/data:ro        # Read-only — Plex never writes media
+      - ${ROOT_MEDIA_DIR}/transcode:/transcode # Dedicated temp space for transcoded segments
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    ports:
+      - "32400:32400" # Direct Plex client access
+    networks:
+      - media_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:32400/identity || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+          cpus: '4'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.plex.rule=Host(`plex.${DOMAIN}`)"
+      - "traefik.http.routers.plex.entrypoints=websecure"
+      - "traefik.http.routers.plex.tls=true"
+      - "traefik.http.routers.plex.tls.certresolver=myresolver"
+      - "traefik.http.routers.plex.middlewares=security-headers@file"
+      - "traefik.http.services.plex.loadbalancer.server.port=32400"
+
+  tautulli:
+    image: lscr.io/linuxserver/tautulli:latest
+    container_name: tautulli
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - /opt/docker/tautulli:/config
+    networks:
+      - media_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8181/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.tautulli.rule=Host(`tautulli.${DOMAIN}`)"
+      - "traefik.http.routers.tautulli.entrypoints=web"
+      - "traefik.http.routers.tautulli.middlewares=security-headers@file"
+      - "traefik.http.services.tautulli.loadbalancer.server.port=8181"
+
+  # --- VPN Server ---
+  wg-easy:
+    image: ghcr.io/wg-easy/wg-easy
+    container_name: wg-easy
+    environment:
+      - LANG=en
+      - WG_HOST=${SERVER_IP}
+      - PASSWORD_HASH=${PASSWORD_HASH}
+      - WG_PORT=51820
+      - WG_DEFAULT_DNS=1.1.1.1
+      - TZ=${TZ}
+    volumes:
+      - /opt/docker/wg-easy:/etc/wireguard
+    ports:
+      - "51820:51820/udp"
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+      - net.ipv4.ip_forward=1
+    networks:
+      - media_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.wg-easy.rule=Host(`wireguard.${DOMAIN}`)"
+      - "traefik.http.routers.wg-easy.entrypoints=web"
+      - "traefik.http.routers.wg-easy.middlewares=security-headers@file"
+      - "traefik.http.services.wg-easy.loadbalancer.server.port=51821"
+
+  # --- Download Client ---
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - WEBUI_PORT=8080
+    volumes:
+      - /opt/docker/qbittorrent:/config
+      - ${ROOT_MEDIA_DIR}:/data # Unified mount point
+    network_mode: service:gluetun
+    depends_on:
+      gluetun:
+        condition: service_healthy # Wait for VPN to be established before starting
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '2'
+
+  # --- Index Manager ---
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - /opt/docker/prowlarr:/config
+    networks:
+      - media_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9696/ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prowlarr.rule=Host(`prowlarr.${DOMAIN}`)"
+      - "traefik.http.routers.prowlarr.entrypoints=web"
+      - "traefik.http.routers.prowlarr.middlewares=security-headers@file"
+      - "traefik.http.services.prowlarr.loadbalancer.server.port=9696"
+
+  # --- The "Arrs" ---
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - /opt/docker/sonarr:/config
+      - ${ROOT_MEDIA_DIR}:/data # Unified mount point
+    networks:
+      - media_network
+    depends_on:
+      - prowlarr
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8989/ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sonarr.rule=Host(`sonarr.${DOMAIN}`)"
+      - "traefik.http.routers.sonarr.entrypoints=web"
+      - "traefik.http.routers.sonarr.middlewares=security-headers@file"
+      - "traefik.http.services.sonarr.loadbalancer.server.port=8989"
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - /opt/docker/radarr:/config
+      - ${ROOT_MEDIA_DIR}:/data # Unified mount point
+    networks:
+      - media_network
+    depends_on:
+      - prowlarr
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7878/ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.radarr.rule=Host(`radarr.${DOMAIN}`)"
+      - "traefik.http.routers.radarr.entrypoints=web"
+      - "traefik.http.routers.radarr.middlewares=security-headers@file"
+      - "traefik.http.services.radarr.loadbalancer.server.port=7878"
+
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:latest
+    container_name: lidarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - /opt/docker/lidarr:/config
+      - ${ROOT_MEDIA_DIR}:/data # Unified mount point
+    networks:
+      - media_network
+    depends_on:
+      - prowlarr
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8686/ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.lidarr.rule=Host(`lidarr.${DOMAIN}`)"
+      - "traefik.http.routers.lidarr.entrypoints=web"
+      - "traefik.http.routers.lidarr.middlewares=security-headers@file"
+      - "traefik.http.services.lidarr.loadbalancer.server.port=8686"
+
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: bazarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - /opt/docker/bazarr:/config
+      - ${ROOT_MEDIA_DIR}:/data # Unified mount point
+    networks:
+      - media_network
+    depends_on:
+      - sonarr
+      - radarr
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:6767/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.bazarr.rule=Host(`bazarr.${DOMAIN}`)"
+      - "traefik.http.routers.bazarr.entrypoints=web"
+      - "traefik.http.routers.bazarr.middlewares=security-headers@file"
+      - "traefik.http.services.bazarr.loadbalancer.server.port=6767"
+
+  # --- Local LLM (Ollama) ---
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    entrypoint: ["/bin/sh", "-c", "ollama serve & until ollama list >/dev/null 2>&1; do sleep 1; done; ollama rm qwen3.5:9b 2>/dev/null; ollama pull qwen2.5-coder:3b; wait"]
+    environment:
+      - OLLAMA_NUM_THREADS=4      # Leave 2 cores free for other services
+      - OLLAMA_KEEP_ALIVE=24h     # Keep model loaded in RAM for 24h
+    volumes:
+      - /opt/docker/ollama:/root/.ollama
+    networks:
+      - media_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:11434/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 10G
+          cpus: '4'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ollama.rule=Host(`ollama.${DOMAIN}`)"
+      - "traefik.http.routers.ollama.entrypoints=web"
+      - "traefik.http.routers.ollama.middlewares=security-headers@file"
+      - "traefik.http.services.ollama.loadbalancer.server.port=11434"
+
+  # --- LLM Web UI (Open WebUI) ---
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+    volumes:
+      - /opt/docker/open-webui:/app/backend/data
+    networks:
+      - media_network
+    depends_on:
+      - ollama
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.open-webui.rule=Host(`chat.${DOMAIN}`)"
+      - "traefik.http.routers.open-webui.entrypoints=web"
+      - "traefik.http.routers.open-webui.middlewares=security-headers@file"
+      - "traefik.http.services.open-webui.loadbalancer.server.port=8080"
+
+networks:
+  media_network:
+    driver: bridge
+  socket_proxy_network:
+    driver: bridge
+    internal: true # No external connectivity — socket-proxy cannot reach the internet

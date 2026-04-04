@@ -1,0 +1,17 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Traefik
+/opt/docker/traefik/letsencrypt/
+/opt/docker/traefik/logs/
+traefik/dynamic.yml
+
+# Editor & OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
