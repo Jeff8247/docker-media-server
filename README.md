@@ -66,18 +66,18 @@ sudo chown -R $USER:$USER /opt/docker
 
 | Variable | Description |
 |---|---|
-| `DOMAIN` | Your domain (e.g. `yourdomain.com`) |
-| `ACME_EMAIL` | Email for Let's Encrypt notifications |
-| `TZ` | Timezone (e.g. `America/New_York`) |
-| `PUID` / `PGID` | User/group ID for file permissions (`id -u` / `id -g`) |
-| `ROOT_MEDIA_DIR` | Absolute path to your media root (e.g. `/mnt/media`) |
-| `VPN_USER` / `VPN_PASSWORD` | PIA credentials |
-| `VPN_REGION` | PIA server region (e.g. `Switzerland`) |
-| `SERVER_IP` | Public IP of your server (used by Plex ADVERTISE_IP and wg-easy) |
-| `LOCAL_SUBNET` | Local subnet for qBittorrent IP allowlist (e.g. `192.168.1.0/24`) |
-| `CF_DNS_API_TOKEN` | Cloudflare API token for Traefik DNS challenge |
-| `CLOUDFLARE_TUNNEL_TOKEN` | Cloudflare Tunnel token (see Cloudflare Tunnel Setup below) |
-| `PASSWORD_HASH` | Bcrypt hash of the wg-easy web UI password |
+| `DOMAIN` | Your root domain (e.g. `yourdomain.com`). Subdomains for each service are derived from this. |
+| `SERVER_IP` | Your server's public IP. Run `curl ifconfig.me` to find it. Used by Plex for direct client connections and wg-easy for WireGuard. |
+| `LOCAL_SUBNET` | Your LAN subnet in CIDR notation (e.g. `192.168.1.0/24`). Used to restrict qBittorrent access to local IPs only. |
+| `ACME_EMAIL` | Email address for Let's Encrypt certificate expiry notifications. |
+| `TZ` | Timezone in tz database format (e.g. `America/New_York`). Full list at [Wikipedia](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones). |
+| `PUID` / `PGID` | User/group ID that containers run as for file permissions. Run `id -u` and `id -g` to get your values. Default on a fresh Linux install is `1000`/`1000`. |
+| `ROOT_MEDIA_DIR` | Absolute path to your media root directory (e.g. `/mnt/media`). All media containers mount this at `/data`. |
+| `VPN_USER` / `VPN_PASSWORD` | PIA credentials. `VPN_USER` is the `p1234567`-style username from your PIA OpenVPN config (PIA dashboard → Downloads → OpenVPN), not your login email. `VPN_PASSWORD` is your PIA account password. |
+| `VPN_REGION` | PIA server region (e.g. `Switzerland`). Full list of valid region names in the [Gluetun wiki](https://github.com/qdm12/gluetun-wiki/blob/main/setup/providers/private-internet-access.md). |
+| `CF_DNS_API_TOKEN` | Cloudflare API token for Traefik to complete the DNS-01 challenge. Create at **Cloudflare → My Profile → API Tokens → Create Token** using the "Edit zone DNS" template. Scope it to your specific zone. |
+| `CLOUDFLARE_TUNNEL_TOKEN` | Token for the Cloudflare Tunnel. Found at **Cloudflare Zero Trust → Networks → Tunnels → your tunnel → Configure**. See Cloudflare Tunnel Setup below. |
+| `PASSWORD_HASH` | Bcrypt hash of your wg-easy web UI password. Generate with: `docker run --rm ghcr.io/wg-easy/wg-easy wgpw YOUR_PASSWORD` |
 
 ### 2. Cloudflare Tunnel Setup
 
