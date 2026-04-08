@@ -20,8 +20,6 @@ This project sets up a comprehensive, automated media server environment using D
 | **Prowlarr** | Central indexer manager — syncs torrent indexers to all arrs |
 | **Watchtower** | Automatically updates running containers (nickfedor/watchtower fork) |
 | **wg-easy** | WireGuard VPN server with a web UI for managing client configs |
-| **Ollama** | Local LLM runtime — auto-pulls model on startup |
-| **Open WebUI** | Web UI for chatting with Ollama models |
 
 ## Prerequisites
 
@@ -56,7 +54,7 @@ Container config and persistent data is stored under `/opt/docker/`. This is a c
 `/opt/` is root-owned, so create the directories with `sudo` before starting the stack:
 
 ```bash
-sudo mkdir -p /opt/docker/{traefik/letsencrypt,traefik/logs,gluetun,plex,tautulli,qbittorrent,prowlarr,sonarr,radarr,lidarr,bazarr,wg-easy,ollama,open-webui}
+sudo mkdir -p /opt/docker/{traefik/letsencrypt,traefik/logs,gluetun,plex,tautulli,qbittorrent,prowlarr,sonarr,radarr,lidarr,bazarr,wg-easy}
 sudo chown -R $USER:$USER /opt/docker
 ```
 
@@ -273,4 +271,3 @@ On first launch, Tautulli will prompt you to connect to Plex. Use the internal D
 | Prowlarr | `https://prowlarr.yourdomain.com` |
 | qBittorrent | `https://qbittorrent.yourdomain.com` |
 | WireGuard | `https://wireguard.yourdomain.com` |
-| Open WebUI | `https://chat.yourdomain.com` |

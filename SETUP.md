@@ -54,9 +54,7 @@ sudo mkdir -p /opt/docker/traefik/letsencrypt \
               /opt/docker/radarr \
               /opt/docker/lidarr \
               /opt/docker/bazarr \
-              /opt/docker/wg-easy \
-              /opt/docker/ollama \
-              /opt/docker/open-webui
+              /opt/docker/wg-easy
 sudo chown -R 1000:1000 /opt/docker
 ```
 
@@ -116,7 +114,6 @@ In **Cloudflare Zero Trust → Networks → Tunnels → your tunnel → Public H
 | `bazarr.yourdomain.com` | `http://traefik:80` |
 | `prowlarr.yourdomain.com` | `http://traefik:80` |
 | `wireguard.yourdomain.com` | `http://traefik:80` |
-| `chat.yourdomain.com` | `http://traefik:80` |
 
 > All traffic routes through Traefik — Cloudflare Tunnel does not connect directly to individual containers.
 >
@@ -192,6 +189,3 @@ Open each app and configure paths. See **README.md → First-Time App Configurat
 - Set your password hash via `PASSWORD_HASH` in `.env` before starting (generate with `docker run --rm ghcr.io/wg-easy/wg-easy wgpw YOUR_PASSWORD`)
 - Add VPN clients via the web UI
 
-### Open WebUI — `https://chat.yourdomain.com`
-- On first launch, create an admin account
-- Ollama is pre-configured via `OLLAMA_BASE_URL` — models are available immediately once Ollama has finished pulling on startup
