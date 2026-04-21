@@ -88,7 +88,7 @@ The `cloudflared` service creates an outbound-only tunnel to Cloudflare's edge �
 3. Copy the tunnel token and set it as `CLOUDFLARE_TUNNEL_TOKEN` in `.env`
 4. Under the tunnel's **Public Hostnames** tab, add a route for each service pointing to `http://traefik:80`
 
-See **SETUP.md → Step 6** for the full hostnames table.
+See **SETUP.md → Step 7** for the full hostnames table.
 
 ### 3. Unified Volumes (TRaSH Guides)
 

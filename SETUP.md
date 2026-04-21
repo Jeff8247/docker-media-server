@@ -62,7 +62,33 @@ sudo chown -R 1000:1000 /opt/docker
 
 ---
 
-## Step 4 — Create Download Directories
+## Step 4 — Create Traefik Dynamic Config
+
+Traefik loads middleware definitions from a dynamic config file at startup. This file must exist before starting the stack — if it's missing, Docker creates it as a directory and Traefik fails to start.
+
+```bash
+cat > /opt/docker/traefik/dynamic.yml << 'EOF'
+http:
+  middlewares:
+    security-headers:
+      headers:
+        customFrameOptionsValue: "SAMEORIGIN"
+        browserXssFilter: true
+        contentTypeNosniff: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+        referrerPolicy: "strict-origin-when-cross-origin"
+        customResponseHeaders:
+          Permissions-Policy: "camera=(), microphone=(), payment=()"
+EOF
+```
+
+This defines the `security-headers` middleware that every service references in its Traefik labels.
+
+---
+
+## Step 5 — Create Download Directories
 
 ```bash
 mkdir -p $ROOT_MEDIA_DIR/downloads/complete
@@ -71,7 +97,7 @@ mkdir -p $ROOT_MEDIA_DIR/downloads/incomplete
 
 ---
 
-## Step 5 — Install VAAPI Drivers (Hardware Transcoding)
+## Step 6 — Install VAAPI Drivers (Hardware Transcoding)
 
 ```bash
 sudo apt install mesa-va-drivers vainfo
@@ -101,7 +127,7 @@ sudo modprobe amdgpu
 
 ---
 
-## Step 6 — Configure Cloudflare Tunnel Public Hostnames
+## Step 7 — Configure Cloudflare Tunnel Public Hostnames
 
 In **Cloudflare Zero Trust → Networks → Tunnels → your tunnel → Public Hostnames**, add a route for each service pointing to Traefik:
 
@@ -125,7 +151,7 @@ In **Cloudflare Zero Trust → Networks → Tunnels → your tunnel → Public H
 
 ---
 
-## Step 7 — Start the Stack
+## Step 8 — Start the Stack
 
 ```bash
 docker compose up -d
@@ -146,7 +172,7 @@ docker compose logs -f gluetun
 
 ---
 
-## Step 8 — Configure Apps
+## Step 9 — Configure Apps
 
 Open each app and configure paths. See **README.md → First-Time App Configuration** for full details. Quick reference:
 
@@ -189,6 +215,7 @@ Open each app and configure paths. See **README.md → First-Time App Configurat
 
 ### WireGuard — `https://wireguard.yourdomain.com`
 - Set your password hash via `PASSWORD_HASH` in `.env` before starting (generate with `docker run --rm ghcr.io/wg-easy/wg-easy wgpw YOUR_PASSWORD`)
+- Ensure port **51820/UDP** is open in your firewall — this is the WireGuard tunnel port clients connect to
 - Add VPN clients via the web UI
 
 ### Minecraft Servers — `<server-ip>:25565` / `<server-ip>:25566`
