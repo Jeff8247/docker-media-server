@@ -54,7 +54,9 @@ sudo mkdir -p /opt/docker/traefik/letsencrypt \
               /opt/docker/radarr \
               /opt/docker/lidarr \
               /opt/docker/bazarr \
-              /opt/docker/wg-easy
+              /opt/docker/wg-easy \
+              /opt/docker/minecraft-survival \
+              /opt/docker/minecraft-creative
 sudo chown -R 1000:1000 /opt/docker
 ```
 
@@ -188,4 +190,11 @@ Open each app and configure paths. See **README.md → First-Time App Configurat
 ### WireGuard — `https://wireguard.yourdomain.com`
 - Set your password hash via `PASSWORD_HASH` in `.env` before starting (generate with `docker run --rm ghcr.io/wg-easy/wg-easy wgpw YOUR_PASSWORD`)
 - Add VPN clients via the web UI
+
+### Minecraft Servers — `<server-ip>:25565` / `<server-ip>:25566`
+The servers start automatically and require no manual configuration. Connect from the Minecraft client using your server's IP and the appropriate port:
+- Survival: `<server-ip>:25565`
+- Creative: `<server-ip>:25566`
+
+Ensure ports 25565 and 25566 (TCP) are open in your firewall.
 

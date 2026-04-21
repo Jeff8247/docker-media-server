@@ -458,6 +458,67 @@ services:
       - "traefik.http.routers.bazarr.middlewares=security-headers@file"
       - "traefik.http.services.bazarr.loadbalancer.server.port=6767"
 
+  # --- Minecraft Servers ---
+  minecraft-survival:
+    image: itzg/minecraft-server:latest
+    container_name: minecraft-survival
+    stdin_open: true
+    tty: true
+    environment:
+      - EULA=TRUE
+      - TYPE=VANILLA
+      - VERSION=26.1.2
+      - MEMORY=2G
+      - TZ=${TZ}
+    volumes:
+      - /opt/docker/minecraft-survival:/data
+    ports:
+      - "25565:25565"
+    networks:
+      - media_network
+    restart: unless-stopped
+    healthcheck:
+      test: mc-health
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+          cpus: '2'
+
+  minecraft-creative:
+    image: itzg/minecraft-server:latest
+    container_name: minecraft-creative
+    stdin_open: true
+    tty: true
+    environment:
+      - EULA=TRUE
+      - TYPE=VANILLA
+      - VERSION=26.1.2
+      - MEMORY=2G
+      - TZ=${TZ}
+    volumes:
+      - /opt/docker/minecraft-creative:/data
+    ports:
+      - "25566:25565"  # Clients connect to <server-ip>:25566
+    networks:
+      - media_network
+    restart: unless-stopped
+    healthcheck:
+      test: mc-health
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+          cpus: '2'
+
 networks:
   media_network:
     driver: bridge
