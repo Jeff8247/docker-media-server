@@ -467,7 +467,7 @@ services:
     environment:
       - EULA=TRUE
       - TYPE=VANILLA
-      - VERSION=26.1.2
+      - VERSION=LATEST
       - MEMORY=2G
       - TZ=${TZ}
     volumes:
@@ -497,7 +497,7 @@ services:
     environment:
       - EULA=TRUE
       - TYPE=VANILLA
-      - VERSION=26.1.2
+      - VERSION=LATEST
       - MEMORY=2G
       - TZ=${TZ}
     volumes:
