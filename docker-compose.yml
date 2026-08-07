@@ -135,7 +135,7 @@ services:
       - HEALTH_VPN_DURATION_INITIAL=30s      # Give VPN 30s to stabilise before health checks
       - HEALTH_VPN_DURATION_ADDITION=10s     # Allow 10s extra per subsequent check
     ports:
-      - 8080:8080   # qBittorrent Web UI
+      # - 8080:8080   # qBittorrent Web UI (internal access remains available at gluetun:8080)
       - 6881:6881   # Torrent Port TCP
       - 6881:6881/udp # Torrent Port UDP
     volumes:
