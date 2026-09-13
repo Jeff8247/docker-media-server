@@ -1,0 +1,10 @@
+[Unit]
+Description=Automatically update the MediaServer stack each day
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+Unit=mediaserver-update.service
+
+[Install]
+WantedBy=timers.target

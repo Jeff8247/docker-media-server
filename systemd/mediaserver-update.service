@@ -1,0 +1,11 @@
+[Unit]
+Description=Update the MediaServer Docker Compose stack
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=@PROJECT_DIR@
+ExecStart=@PROJECT_DIR@/scripts/update-containers.sh
+TimeoutStartSec=30min

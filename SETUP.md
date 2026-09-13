@@ -1,227 +1,149 @@
-# Setup Guide
+# Hardened Setup Guide
 
-Follow these steps in order before starting the stack for the first time.
+Follow these steps before recreating the stack. The wg-easy v15 migration and `LAN_IP` setting are required to preserve access.
 
----
+## 1. Configure the environment
 
-## Step 1 — Fill in `.env`
+Use [.env.example](.env.example) as the reference and keep the real `.env` at mode `0600`.
+
+`LAN_IP` must be the server's private address on the household LAN, not its public address. If it is omitted, Traefik 443 and both Minecraft ports deliberately bind to `127.0.0.1` and will not be reachable from other devices.
 
 ```bash
-nano .env
+chmod 600 .env
+docker compose config --quiet
 ```
 
-| Variable | Where to get it |
+Keep the Cloudflare DNS token limited to DNS edit access for this single zone.
+
+## 2. Prepare directories and permissions
+
+```bash
+sudo mkdir -p /opt/docker/{traefik/letsencrypt,traefik/logs,gluetun,plex,tautulli,qbittorrent,prowlarr,sonarr,radarr,lidarr,bazarr,minecraft-survival,minecraft-creative,wg-easy-v15}
+sudo chown -R 1000:1000 /opt/docker/traefik /opt/docker/plex /opt/docker/tautulli /opt/docker/qbittorrent /opt/docker/prowlarr /opt/docker/sonarr /opt/docker/radarr /opt/docker/lidarr /opt/docker/bazarr /opt/docker/minecraft-survival /opt/docker/minecraft-creative
+sudo chmod 700 /opt/docker/wg-easy-v15
+```
+
+Adjust `1000:1000` if `PUID` and `PGID` differ. The installer removes group/world access from application configuration without changing ownership:
+
+```bash
+sudo ./scripts/install-host-hardening.sh
+```
+
+It also installs the updater timer and Traefik access-log rotation. Confirm the timer:
+
+```bash
+systemctl list-timers mediaserver-update.timer
+```
+
+## 3. Prepare wg-easy v15 migration
+
+The old v14 state remains at `/opt/docker/wg-easy`. Before deployment, make a protected backup of its `wg0.json` and `wg0.conf`.
+
+After v15 starts:
+
+1. Open `https://wireguard.${DOMAIN}` through Cloudflare Access.
+2. Complete the v15 administrator setup.
+3. Select the existing-setup migration and upload the old `wg0.json`.
+4. Confirm the server address and UDP port 51820.
+5. Test at least one existing peer over mobile data before deleting any v14 data.
+
+The deprecated v14 `PASSWORD_HASH` value is retained in `.env` only to support rollback; v15 manages its administrator during setup.
+
+## 4. Configure Cloudflare Tunnel and Access
+
+Create Tunnel public-hostname routes pointing to `http://traefik:80` for:
+
+| Hostname |
+|---|
+| `traefik.${DOMAIN}` |
+| `tautulli.${DOMAIN}` |
+| `sonarr.${DOMAIN}` |
+| `radarr.${DOMAIN}` |
+| `lidarr.${DOMAIN}` |
+| `bazarr.${DOMAIN}` |
+| `prowlarr.${DOMAIN}` |
+| `wireguard.${DOMAIN}` |
+
+Do not create Tunnel routes for Plex or qBittorrent.
+
+For every listed hostname:
+
+1. Attach a Cloudflare Access allow policy for the intended identities.
+2. In the Tunnel route's additional application settings, enable **Protect with Access** and select the matching Access application/audience.
+3. Keep the origin URL as HTTP; it travels only across the dedicated Docker edge network.
+
+The tunnel token authenticates the connector. It is not an Access service token and does not itself bypass or satisfy an Access policy.
+
+## 5. Firewall and router policy
+
+Allow only:
+
+| Source | Destination |
 |---|---|
-| `VPN_USER` | The `p1234567`-style username from your PIA OpenVPN config file (download from PIA → Downloads → OpenVPN) |
-| `VPN_PASSWORD` | Your PIA account password (the same one used to log into the PIA website) |
-| `CF_DNS_API_TOKEN` | Cloudflare → My Profile → API Tokens → Create Token → "Edit zone DNS" template |
-| `CLOUDFLARE_TUNNEL_TOKEN` | Cloudflare Zero Trust → Networks → Tunnels → your tunnel → Configure → copy token |
+| Internet | TCP 32400 for Plex, if direct remote access is required |
+| Internet | UDP 51820 for WireGuard |
+| `LOCAL_SUBNET` | `LAN_IP`: TCP 443, 25565, 25566 |
+| WireGuard clients | `LAN_IP`: TCP 25565, 25566 and other explicitly approved LAN services |
 
----
+Explicitly reject WAN TCP 80, TCP 443, TCP 25565-25566, and TCP/UDP 6881. Ensure the router has no forwards for those ports. Docker binds 443 and Minecraft to `LAN_IP`, but firewall policy remains required defense in depth.
 
-## Step 2 — Set Media Directory Permissions
-
-Confirm your user's UID and GID match `PUID` and `PGID` in `.env`:
+## 6. Start and migrate
 
 ```bash
-id
+docker compose pull
+docker compose up -d --remove-orphans --wait --wait-timeout 300
+docker compose ps
 ```
 
-The default on a fresh Linux install is `1000:1000`. Set ownership and permissions on the media directory:
+`--remove-orphans` removes the retired Watchtower and Docker socket-proxy containers. Their removal is intentional; automatic updates now run from the host timer.
+
+Existing qBittorrent installations are updated during container initialization to:
+
+- allow Gluetun's shared-loopback port-forward callback;
+- restrict qBittorrent's accepted Host header to its configured hostname.
+
+For a completely new qBittorrent config, recreate it once after its first successful start so the initialization script can update the newly created file:
 
 ```bash
-export ROOT_MEDIA_DIR=/path/to/your/media
-sudo chown -R 1000:1000 $ROOT_MEDIA_DIR
-find $ROOT_MEDIA_DIR -type d -exec chmod 755 {} \;
-find $ROOT_MEDIA_DIR -type f -exec chmod 644 {} \;
+docker compose up -d --force-recreate qbittorrent
 ```
 
----
+## 7. Application paths
 
-## Step 3 — Pre-create Config Directories
-
-Docker creates volume mount points as root if they don't exist, which breaks container startup. Create them first with the correct ownership:
-
-```bash
-sudo mkdir -p /opt/docker/traefik/letsencrypt \
-              /opt/docker/traefik/logs \
-              /opt/docker/gluetun \
-              /opt/docker/plex \
-              /opt/docker/tautulli \
-              /opt/docker/qbittorrent \
-              /opt/docker/prowlarr \
-              /opt/docker/sonarr \
-              /opt/docker/radarr \
-              /opt/docker/lidarr \
-              /opt/docker/bazarr \
-              /opt/docker/wg-easy \
-              /opt/docker/minecraft-survival \
-              /opt/docker/minecraft-creative
-sudo chown -R 1000:1000 /opt/docker
-```
-
----
-
-## Step 4 — Create Traefik Dynamic Config
-
-Traefik loads middleware definitions from a dynamic config file at startup. This file must exist before starting the stack — if it's missing, Docker creates it as a directory and Traefik fails to start.
-
-```bash
-cat > /opt/docker/traefik/dynamic.yml << 'EOF'
-http:
-  middlewares:
-    security-headers:
-      headers:
-        customFrameOptionsValue: "SAMEORIGIN"
-        browserXssFilter: true
-        contentTypeNosniff: true
-        stsIncludeSubdomains: true
-        stsPreload: true
-        stsSeconds: 31536000
-        referrerPolicy: "strict-origin-when-cross-origin"
-        customResponseHeaders:
-          Permissions-Policy: "camera=(), microphone=(), payment=()"
-EOF
-```
-
-This defines the `security-headers` middleware that every service references in its Traefik labels.
-
----
-
-## Step 5 — Create Download Directories
-
-```bash
-mkdir -p $ROOT_MEDIA_DIR/downloads/complete
-mkdir -p $ROOT_MEDIA_DIR/downloads/incomplete
-```
-
----
-
-## Step 6 — Install VAAPI Drivers (Hardware Transcoding)
-
-```bash
-sudo apt install mesa-va-drivers vainfo
-```
-
-Add your user to the `render` and `video` groups so containers can access the GPU:
-
-```bash
-sudo usermod -aG render,video $USER
-```
-
-**Log out and back in** for the group change to take effect, then verify:
-
-```bash
-ls -la /dev/dri/
-# Should show renderD128 and card0
-
-vainfo
-# Should list VAProfileH264 and VAProfileHEVC
-```
-
-If `renderD128` is missing, load the amdgpu kernel module:
-
-```bash
-sudo modprobe amdgpu
-```
-
----
-
-## Step 7 — Configure Cloudflare Tunnel Public Hostnames
-
-In **Cloudflare Zero Trust → Networks → Tunnels → your tunnel → Public Hostnames**, add a route for each service pointing to Traefik:
-
-| Subdomain | URL |
-|---|---|
-| `traefik.yourdomain.com` | `http://traefik:80` |
-| `plex.yourdomain.com` | `http://traefik:80` |
-| `tautulli.yourdomain.com` | `http://traefik:80` |
-| `sonarr.yourdomain.com` | `http://traefik:80` |
-| `radarr.yourdomain.com` | `http://traefik:80` |
-| `lidarr.yourdomain.com` | `http://traefik:80` |
-| `bazarr.yourdomain.com` | `http://traefik:80` |
-| `prowlarr.yourdomain.com` | `http://traefik:80` |
-| `wireguard.yourdomain.com` | `http://traefik:80` |
-
-> All traffic routes through Traefik — Cloudflare Tunnel does not connect directly to individual containers.
->
-> **Why HTTP and not HTTPS?** Cloudflare terminates public TLS at the edge. The internal connection from `cloudflared` to Traefik uses plain HTTP on port 80, which avoids certificate verification issues.
-
-> **qBittorrent is not in this list.** Its DNS record is set to DNS-only (grey cloud) in Cloudflare — traffic goes directly to the server on port 443, handled by Traefik. Access is restricted to allowed IPs via Traefik middleware.
-
----
-
-## Step 8 — Start the Stack
-
-```bash
-docker compose up -d
-```
-
-Watch the logs to confirm everything comes up cleanly:
-
-```bash
-docker compose logs -f
-```
-
-Check Gluetun specifically to confirm the VPN connects before continuing:
-
-```bash
-docker compose logs -f gluetun
-# Look for: "Healthy!" in the Gluetun output
-```
-
----
-
-## Step 9 — Configure Apps
-
-Open each app and configure paths. See **README.md → First-Time App Configuration** for full details. Quick reference:
-
-### qBittorrent — `https://qbittorrent.yourdomain.com`
-- Default Save Path → `/data/downloads/complete`
-- Incomplete Downloads → `/data/downloads/incomplete`
-
-### Prowlarr — `https://prowlarr.yourdomain.com`
-1. **Indexers → Add Indexer** — add your torrent indexers
-2. **Settings → Apps** — connect to Radarr, Sonarr, and Lidarr:
-
-| App | URL | API Key |
+| Application | Setting | Value |
 |---|---|---|
-| Radarr | `http://radarr:7878` | Radarr → Settings → General |
-| Sonarr | `http://sonarr:8989` | Sonarr → Settings → General |
-| Lidarr | `http://lidarr:8686` | Lidarr → Settings → General |
+| qBittorrent | Complete downloads | `/data/downloads/complete` |
+| qBittorrent | Incomplete downloads | `/data/downloads/incomplete` |
+| Radarr | Root folder / download client | `/data/movies` / `http://gluetun:8080` |
+| Sonarr | Root folder / download client | `/data/tv` / `http://gluetun:8080` |
+| Lidarr | Root folder / download client | `/data/music` / `http://gluetun:8080` |
+| Bazarr | Sonarr / Radarr | `http://sonarr:8989` / `http://radarr:7878` |
+| Tautulli | Plex | `http://plex:32400` |
 
-### Radarr — `https://radarr.yourdomain.com`
-- Root Folder → `/data/movies`
-- Settings → Download Clients → Add qBittorrent → Host: `gluetun`, Port: `8080`, Category: `radarr`
+Prowlarr reaches the arr services by their service names and standard ports over the internal indexer network.
 
-### Sonarr — `https://sonarr.yourdomain.com`
-- Root Folder → `/data/tv`
-- Settings → Download Clients → Add qBittorrent → Host: `gluetun`, Port: `8080`, Category: `sonarr`
+## 8. Security validation
 
-### Lidarr — `https://lidarr.yourdomain.com`
-- Root Folder → `/data/music`
-- Settings → Download Clients → Add qBittorrent → Host: `gluetun`, Port: `8080`, Category: `lidarr`
+Run these checks after deployment:
 
-### Bazarr — `https://bazarr.yourdomain.com`
-- Settings → Sonarr → Host: `sonarr`, Port: `8989`, API Key: *(from Sonarr → Settings → General)*
-- Settings → Radarr → Host: `radarr`, Port: `7878`, API Key: *(from Radarr → Settings → General)*
+```bash
+docker compose config --quiet
+docker compose exec traefik traefik version
+docker compose ps
+docker compose exec gluetun wget -qO- https://ipinfo.io/ip
+docker compose exec qbittorrent wget -qO- https://ipinfo.io/ip
+```
 
-### Plex — `https://plex.yourdomain.com`
-- Sign in and add libraries: Movies → `/data/movies`, TV Shows → `/data/tv`, Music → `/data/music`
-- Settings → Transcoder → Enable hardware acceleration and hardware-accelerated encoding
+Confirm:
 
-### Tautulli — `https://tautulli.yourdomain.com`
-- Sign in with your Plex account when prompted, or connect manually via `http://plex:32400`
+- Traefik is at least 3.7.13 and has no Docker socket mounted.
+- An unauthenticated request to every tunneled hostname is rejected by Cloudflare Access.
+- TCP 80 is unreachable on the host and from the internet.
+- qBittorrent is available from the LAN hostname but rejected from non-LAN sources.
+- qBittorrent's listening port matches `/tmp/gluetun/forwarded_port` after PIA connects.
+- Stopping Gluetun prevents qBittorrent from reaching the internet.
+- Minecraft connects from LAN and WireGuard, but an external port scan cannot reach 25565 or 25566.
+- Existing WireGuard peers still connect after the v15 import.
+- `/opt/docker` application credentials are not group/world-readable.
 
-### WireGuard — `https://wireguard.yourdomain.com`
-- Set your password hash via `PASSWORD_HASH` in `.env` before starting (generate with `docker run --rm ghcr.io/wg-easy/wg-easy wgpw YOUR_PASSWORD`)
-- Ensure port **51820/UDP** is open in your firewall — this is the WireGuard tunnel port clients connect to
-- Add VPN clients via the web UI
-
-### Minecraft Servers — `<server-ip>:25565` / `<server-ip>:25566`
-The servers start automatically and require no manual configuration. Connect from the Minecraft client using your server's IP and the appropriate port:
-- Survival: `<server-ip>:25565`
-- Creative: `<server-ip>:25566`
-
-Ensure ports 25565 and 25566 (TCP) are open in your firewall.
-
+Plex's existing LAN-wide unauthenticated exception is intentionally unchanged. Revisit it when legacy LAN access is no longer needed.
