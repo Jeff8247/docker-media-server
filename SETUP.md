@@ -29,7 +29,11 @@ Adjust `1000:1000` if `PUID` and `PGID` differ. The installer removes group/worl
 sudo ./scripts/install-host-hardening.sh
 ```
 
-It also installs the updater timer and Traefik access-log rotation. Confirm the timer:
+It also installs a root-owned copy of the updater, its timer, and Traefik
+access-log rotation. The updater limits concurrent image pulls and retries
+temporary registry failures three times before failing. Re-run the installer
+after changing `scripts/update-containers.sh` so the root-owned copy is refreshed.
+Confirm the timer:
 
 ```bash
 systemctl list-timers mediaserver-update.timer

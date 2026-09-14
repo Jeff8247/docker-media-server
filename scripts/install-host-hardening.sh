@@ -40,6 +40,9 @@ sed "s|@PROJECT_DIR@|${project_dir}|g" \
   "$project_dir/systemd/mediaserver-update.service" \
   > /etc/systemd/system/mediaserver-update.service
 chmod 0644 /etc/systemd/system/mediaserver-update.service
+install -o root -g root -m 0755 \
+  "$project_dir/scripts/update-containers.sh" \
+  /usr/local/sbin/mediaserver-update
 install -m 0644 "$project_dir/systemd/mediaserver-update.timer" /etc/systemd/system/mediaserver-update.timer
 install -m 0644 "$project_dir/systemd/mediaserver-traefik.logrotate" /etc/logrotate.d/mediaserver-traefik
 
