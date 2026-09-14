@@ -55,7 +55,7 @@ Set `ROOT_MEDIA_DIR` to a directory with this structure:
 
 All download and automation services use `/data`, preserving hardlinks and atomic moves. Plex mounts `/data` read-only, with only `/data/transcode` overlaid writable at `/transcode`.
 
-Persistent application state lives below `/opt/docker`. The active wg-easy v15 database and generated WireGuard configuration live in `/opt/docker/wg-easy-v15`. The retired v14 `/opt/docker/wg-easy` directory is not used by the running stack and may be retained temporarily for rollback or removed after the external backup and all migrated peers have been verified.
+Persistent application state lives below `/opt/docker`. The wg-easy v15 database and generated WireGuard configuration live in `/opt/docker/wg-easy-v15`; include this directory in protected backups.
 
 On this Debian 13 deployment, WireGuard is supplied by the host's 6.12 kernel as a loadable module. Keeping module loading on the host lets wg-easy operate with less privilege while retaining the `NET_ADMIN` capability required to create and configure its WireGuard interface.
 
@@ -74,13 +74,12 @@ Use the scheduled updater manually with:
 sudo ./scripts/update-containers.sh
 ```
 
-See [SETUP.md](SETUP.md) for migration, Cloudflare, firewall, permissions, and validation steps.
+See [SETUP.md](SETUP.md) for deployment, Cloudflare, firewall, permissions, and validation steps.
 
-After a v14 import, restart wg-easy once before testing clients. The imported peers can appear in the v15 UI before they have been written to the live WireGuard interface:
+After changing peers or server settings, verify that wg-easy has synchronized the expected configuration with the live WireGuard interface:
 
 ```bash
-docker restart wg-easy
 docker exec wg-easy wg show
 ```
 
-A successful migration shows the expected server public key and a `peer:` entry for every imported client.
+The output should show the expected server public key and a `peer:` entry for every configured client.

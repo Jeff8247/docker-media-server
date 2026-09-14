@@ -1,6 +1,6 @@
 # Hardened Setup Guide
 
-Follow these steps before recreating the stack. The wg-easy v15 migration and `LAN_IP` setting are required to preserve access.
+Follow these steps before creating or recreating the stack. The `LAN_IP` setting and host module configuration are required for direct access and WireGuard operation.
 
 ## 1. Configure the environment
 
@@ -56,25 +56,23 @@ systemctl list-timers mediaserver-update.timer
 
 ## 3. Prepare or verify wg-easy v15
 
-The running stack uses `/opt/docker/wg-easy-v15`. For a one-time migration from v14, make a protected external backup of `/opt/docker/wg-easy/wg0.json` and `wg0.conf` before deployment. The browser upload must be the v14 JSON file and should retain a `.json` filename extension.
+The running stack stores the v15 administrator database and generated WireGuard
+configuration in `/opt/docker/wg-easy-v15`. Include the entire directory in
+protected, recurring backups.
 
 After v15 starts:
 
 1. Open `https://wireguard.${DOMAIN}` through Cloudflare Access.
-2. Complete the v15 administrator setup.
-3. Select the existing-setup migration and upload the old `wg0.json`.
-4. Confirm the server address and UDP port 51820.
-5. Restart wg-easy so the imported database is rendered into `wg0.conf` and synchronized with the live interface:
+2. Complete the administrator setup if this is a new installation.
+3. Confirm the server address and UDP port 51820.
+4. Create or verify the expected clients.
+5. Confirm the live interface contains the expected server key and peers:
 
    ```bash
-   docker restart wg-easy
    docker exec wg-easy wg show
    ```
 
-6. Confirm the original server public key and all expected `peer:` entries are present.
-7. Test every existing peer over mobile data before deleting any v14 data.
-
-The v15 administrator and WireGuard state are stored in `wg-easy.db`. Back up `/opt/docker/wg-easy-v15` for ongoing recovery; the old v14 JSON does not include later v15 changes.
+6. Test every client over mobile data.
 
 ## 4. Configure Cloudflare Tunnel and Access
 
@@ -122,7 +120,7 @@ docker compose up -d --remove-orphans --wait --wait-timeout 300
 docker compose ps
 ```
 
-For an existing migrated installation, verify that WireGuard loaded its peers:
+Verify that WireGuard loaded its configured peers:
 
 ```bash
 docker exec wg-easy wg show
@@ -131,7 +129,7 @@ docker exec wg-easy wg show
 The container should start without module-loading errors. After changing the
 host kernel, repeat the `lsmod` check above and test a client after reboot.
 
-`--remove-orphans` removes the retired Watchtower and Docker socket-proxy containers. Their removal is intentional; automatic updates now run from the host timer.
+`--remove-orphans` removes services that are no longer defined by this stack.
 
 Existing qBittorrent installations are updated during container initialization to:
 
@@ -182,4 +180,4 @@ Confirm:
 - Existing WireGuard peers still connect after the v15 import.
 - `/opt/docker` application credentials are not group/world-readable.
 
-Plex's existing LAN-wide unauthenticated exception is intentionally unchanged. Revisit it when legacy LAN access is no longer needed.
+Plex's LAN-wide unauthenticated exception is intentionally unchanged. Revisit it when the LAN authentication bypass is no longer needed.
