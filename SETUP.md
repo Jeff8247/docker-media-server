@@ -35,9 +35,9 @@ It also installs the updater timer and Traefik access-log rotation. Confirm the 
 systemctl list-timers mediaserver-update.timer
 ```
 
-## 3. Prepare wg-easy v15 migration
+## 3. Prepare or verify wg-easy v15
 
-The old v14 state remains at `/opt/docker/wg-easy`. Before deployment, make a protected backup of its `wg0.json` and `wg0.conf`.
+The running stack uses `/opt/docker/wg-easy-v15`. For a one-time migration from v14, make a protected external backup of `/opt/docker/wg-easy/wg0.json` and `wg0.conf` before deployment. The browser upload must be the v14 JSON file and should retain a `.json` filename extension.
 
 After v15 starts:
 
@@ -45,9 +45,17 @@ After v15 starts:
 2. Complete the v15 administrator setup.
 3. Select the existing-setup migration and upload the old `wg0.json`.
 4. Confirm the server address and UDP port 51820.
-5. Test at least one existing peer over mobile data before deleting any v14 data.
+5. Restart wg-easy so the imported database is rendered into `wg0.conf` and synchronized with the live interface:
 
-The deprecated v14 `PASSWORD_HASH` value is retained in `.env` only to support rollback; v15 manages its administrator during setup.
+   ```bash
+   docker restart wg-easy
+   docker exec wg-easy wg show
+   ```
+
+6. Confirm the original server public key and all expected `peer:` entries are present.
+7. Test every existing peer over mobile data before deleting any v14 data.
+
+The v15 administrator and WireGuard state are stored in `wg-easy.db`. Back up `/opt/docker/wg-easy-v15` for ongoing recovery; the old v14 JSON does not include later v15 changes.
 
 ## 4. Configure Cloudflare Tunnel and Access
 
@@ -87,12 +95,18 @@ Allow only:
 
 Explicitly reject WAN TCP 80, TCP 443, TCP 25565-25566, and TCP/UDP 6881. Ensure the router has no forwards for those ports. Docker binds 443 and Minecraft to `LAN_IP`, but firewall policy remains required defense in depth.
 
-## 6. Start and migrate
+## 6. Start and validate
 
 ```bash
 docker compose pull
 docker compose up -d --remove-orphans --wait --wait-timeout 300
 docker compose ps
+```
+
+For an existing migrated installation, verify that WireGuard loaded its peers:
+
+```bash
+docker exec wg-easy wg show
 ```
 
 `--remove-orphans` removes the retired Watchtower and Docker socket-proxy containers. Their removal is intentional; automatic updates now run from the host timer.

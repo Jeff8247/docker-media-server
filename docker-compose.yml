@@ -181,7 +181,7 @@ services:
     environment:
       - TZ=${TZ}
     volumes:
-      # The v14 directory remains untouched for migration and rollback.
+      # Active v15 database and generated WireGuard configuration.
       - /opt/docker/wg-easy-v15:/etc/wireguard
       - /lib/modules:/lib/modules:ro
     ports:
