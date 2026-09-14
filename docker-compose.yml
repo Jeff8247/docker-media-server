@@ -183,10 +183,9 @@ services:
     volumes:
       # Active v15 database and generated WireGuard configuration.
       - /opt/docker/wg-easy-v15:/etc/wireguard
-      - /lib/modules:/lib/modules:ro
     ports:
       - "51820:51820/udp"
-    cap_add: [NET_ADMIN, SYS_MODULE]
+    cap_add: [NET_ADMIN]
     sysctls:
       - net.ipv4.conf.all.src_valid_mark=1
       - net.ipv4.ip_forward=1

@@ -5,6 +5,17 @@ case "${1:-}" in
   inspect)
     if [[ "$*" == *'wg-easy'* ]]; then
       echo 'ghcr.io/wg-easy/wg-easy:15'
+    elif [[ "$*" == *'{{.Id}}'* && "$*" == *'gluetun'* ]]; then
+      inspect_count_file="$MOCK_STATE_DIR/gluetun-inspect-count"
+      inspect_count=0
+      [[ -f "$inspect_count_file" ]] && inspect_count=$(<"$inspect_count_file")
+      inspect_count=$((inspect_count + 1))
+      printf '%s\n' "$inspect_count" >"$inspect_count_file"
+      if [[ "${MOCK_REPLACE_GLUETUN:-0}" == 1 && "$inspect_count" -gt 1 ]]; then
+        echo 'sha256:new-container'
+      else
+        echo 'sha256:old-container'
+      fi
     else
       echo 'sha256:unchanged'
     fi
@@ -20,7 +31,11 @@ case "${1:-}" in
         printf '%s\n' "${COMPOSE_PARALLEL_LIMIT:-unset}" >>"$MOCK_STATE_DIR/parallel-limits"
         ((count >= MOCK_PULL_SUCCEED_ON))
         ;;
-      up|ps) exit 0;;
+      up)
+        printf '%s\n' "$*" >>"$MOCK_STATE_DIR/compose-up-calls"
+        exit 0
+        ;;
+      ps) exit 0;;
       *) exit 1;;
     esac
     ;;

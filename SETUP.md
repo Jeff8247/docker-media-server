@@ -17,6 +17,21 @@ Keep the Cloudflare DNS token limited to DNS edit access for this single zone.
 
 ## 2. Prepare directories and permissions
 
+On Debian 13 with its 6.12 kernel, configure the host to load the modules used by
+WireGuard and wg-easy's firewall before Docker starts. This allows the container
+to run without `SYS_MODULE` or a `/lib/modules` mount:
+
+```bash
+echo -e 'wireguard\nip_tables\nip6_tables' | sudo tee /etc/modules-load.d/wg-easy.conf >/dev/null
+sudo systemctl restart systemd-modules-load.service
+lsmod | grep -E '^(wireguard|ip_tables|ip6_tables) '
+```
+
+All three modules must appear before starting wg-easy. This repository keeps only
+the `NET_ADMIN` capability needed to configure the interface and firewall. If a
+future host kernel compiles these facilities in rather than as modules, confirm
+the corresponding `CONFIG_` settings before removing this host configuration.
+
 ```bash
 sudo mkdir -p /opt/docker/{traefik/letsencrypt,traefik/logs,gluetun,plex,tautulli,qbittorrent,prowlarr,sonarr,radarr,lidarr,bazarr,minecraft-survival,minecraft-creative,wg-easy-v15}
 sudo chown -R 1000:1000 /opt/docker/traefik /opt/docker/plex /opt/docker/tautulli /opt/docker/qbittorrent /opt/docker/prowlarr /opt/docker/sonarr /opt/docker/radarr /opt/docker/lidarr /opt/docker/bazarr /opt/docker/minecraft-survival /opt/docker/minecraft-creative
@@ -112,6 +127,9 @@ For an existing migrated installation, verify that WireGuard loaded its peers:
 ```bash
 docker exec wg-easy wg show
 ```
+
+The container should start without module-loading errors. After changing the
+host kernel, repeat the `lsmod` check above and test a client after reboot.
 
 `--remove-orphans` removes the retired Watchtower and Docker socket-proxy containers. Their removal is intentional; automatic updates now run from the host timer.
 

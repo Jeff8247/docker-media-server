@@ -46,15 +46,16 @@ flock -n 9 || {
   exit 0
 }
 
-before_gluetun_image="$(docker inspect --format '{{.Image}}' gluetun 2>/dev/null || true)"
+before_gluetun_container="$(docker inspect --format '{{.Id}}' gluetun 2>/dev/null || true)"
 
 pull_images
 docker compose up -d --remove-orphans --wait --wait-timeout 300
 
-after_gluetun_image="$(docker inspect --format '{{.Image}}' gluetun 2>/dev/null || true)"
-if [[ -n "$before_gluetun_image" && "$before_gluetun_image" != "$after_gluetun_image" ]]; then
+after_gluetun_container="$(docker inspect --format '{{.Id}}' gluetun 2>/dev/null || true)"
+if [[ -n "$before_gluetun_container" && "$before_gluetun_container" != "$after_gluetun_container" ]]; then
   # network_mode: service:gluetun keeps the old namespace unless qBittorrent
-  # is explicitly recreated after Gluetun changes.
+  # is explicitly recreated after the Gluetun container is replaced. Compare
+  # container IDs rather than image IDs so config-only recreations are covered.
   docker compose up -d --force-recreate qbittorrent
 fi
 

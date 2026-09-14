@@ -35,6 +35,27 @@ PATH="$repo_dir/tests/fixtures/update-bin:$PATH" "$script" >"$tmp/output" 2>&1
 [[ "$(sort -u "$tmp/parallel-limits")" == 4 ]] || { echo 'FAIL: pull concurrency was not passed to Compose'; failures=$((failures + 1)); }
 [[ "$(paste -sd, "$tmp/sleeps")" == '0,0,0' ]] || { echo 'FAIL: updater did not apply all retry delays'; failures=$((failures + 1)); }
 assert_contains "$(<"$tmp/output")" 'Pull attempt 4/4' 'pull succeeds after three transient failures'
+if [[ "$(wc -l <"$tmp/compose-up-calls")" -eq 1 ]]; then
+  echo 'PASS: unchanged Gluetun does not recreate qBittorrent'
+else
+  echo 'FAIL: unchanged Gluetun unexpectedly recreated qBittorrent'
+  failures=$((failures + 1))
+fi
+
+replacement_state="$tmp/replacement"
+mkdir -p "$replacement_state"
+export MOCK_STATE_DIR="$replacement_state"
+export MOCK_PULL_SUCCEED_ON=1
+export MOCK_REPLACE_GLUETUN=1
+export UPDATE_LOCK_FILE="$replacement_state/update.lock"
+PATH="$repo_dir/tests/fixtures/update-bin:$PATH" "$script" >"$replacement_state/output" 2>&1
+if [[ "$(wc -l <"$replacement_state/compose-up-calls")" -eq 2 ]] &&
+   tail -n 1 "$replacement_state/compose-up-calls" | grep -q -- '--force-recreate qbittorrent'; then
+  echo 'PASS: replaced Gluetun recreates qBittorrent'
+else
+  echo 'FAIL: replaced Gluetun did not recreate qBittorrent'
+  failures=$((failures + 1))
+fi
 
 if ((failures)); then
   printf '%d test(s) failed\n' "$failures" >&2
