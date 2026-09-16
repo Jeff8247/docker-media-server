@@ -40,22 +40,28 @@ Minecraft itself is pinned to the currently deployed game version (`26.2`) so an
 
 ## Storage layout
 
-Set `ROOT_MEDIA_DIR` to a directory with this structure:
+On this server, set `ROOT_MEDIA_DIR=/mnt/media/plex`. The media RAID is mounted
+at `/mnt/media`, with the application-visible data below it:
 
 ```text
-/mnt/media/
+/mnt/media/plex/
 ├── downloads/
 │   ├── complete/
 │   └── incomplete/
-├── movies/
-├── tv/
-├── music/
+├── Movies/
+├── TV/
+├── Audio/
 └── transcode/
 ```
 
 All download and automation services use `/data`, preserving hardlinks and atomic moves. Plex mounts `/data` read-only, with only `/data/transcode` overlaid writable at `/transcode`.
 
-Persistent application state lives below `/opt/docker`. The wg-easy v15 database and generated WireGuard configuration live in `/opt/docker/wg-easy-v15`; include this directory in protected backups.
+Persistent application state lives below `/opt/docker`. Protected, recurring,
+off-host backups must include all of `/opt/docker`, the untracked `.env`, the
+media filesystem, and the relevant host storage/firewall configuration. In
+particular, the wg-easy v15 database and generated WireGuard configuration live
+in `/opt/docker/wg-easy-v15`. See the backup and restore procedure in
+[SETUP.md](SETUP.md).
 
 On this Debian 13 deployment, WireGuard is supplied by the host's 6.12 kernel as a loadable module. Keeping module loading on the host lets wg-easy operate with less privilege while retaining the `NET_ADMIN` capability required to create and configure its WireGuard interface.
 
