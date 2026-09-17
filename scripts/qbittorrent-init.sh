@@ -23,4 +23,4 @@ set_preference() {
 # Gluetun's PIA port-forward hook calls qBittorrent over their shared loopback.
 set_preference 'WebUI\\LocalHostAuth' 'false'
 # Keep qBittorrent's own host validation enabled behind Traefik.
-set_preference 'WebUI\\ServerDomains' "${QBITTORRENT_SERVER_DOMAIN:?missing domain};localhost;127.0.0.1"
+set_preference 'WebUI\\ServerDomains' "\"${QBITTORRENT_SERVER_DOMAIN:?missing domain};gluetun;localhost;127.0.0.1\""
