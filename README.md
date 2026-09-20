@@ -11,7 +11,7 @@ This repository runs a media automation stack with Cloudflare Access in front of
 | Plex | Media streaming | TCP 32400 direct; local HTTPS through Traefik |
 | qBittorrent + Gluetun | VPN-isolated downloads | LAN HTTPS only; BitTorrent ingress uses PIA port forwarding |
 | Sonarr, Radarr, Lidarr, Bazarr, Prowlarr, Tautulli | Media automation | Cloudflare Tunnel + Access |
-| Beszel | Host and Docker monitoring with historical charts and alerts | Cloudflare Tunnel + Access; TCP 8090 on `LAN_IP` for local fallback |
+| Beszel | Host and Docker monitoring with historical charts and alerts | Cloudflare Tunnel + Access only |
 | wg-easy 15 | WireGuard server and management UI | UDP 51820 direct; UI through Cloudflare Access |
 | Minecraft | Two vanilla servers | `LAN_IP` only; reachable remotely through WireGuard |
 
@@ -44,9 +44,9 @@ Minecraft itself is pinned to the currently deployed game version (`26.3`) so an
 ## Monitoring
 
 Beszel provides host and per-container CPU, memory, disk, network, temperature,
-uptime, and historical metrics. Its dashboard is available through Cloudflare
-Access at `https://beszel.${DOMAIN}` and directly on the LAN at
-`http://${LAN_IP}:8090`.
+uptime, and historical metrics. Its dashboard is available only through
+Cloudflare Access at `https://beszel.${DOMAIN}`. Port 8090 remains internal to
+Docker and is not published on the host.
 
 The hub and local agent communicate through
 `/opt/docker/beszel/socket/beszel.sock`; no agent TCP port is exposed. Persistent

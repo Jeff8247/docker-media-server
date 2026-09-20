@@ -184,9 +184,6 @@ services:
     volumes:
       - /opt/docker/beszel/data:/beszel_data
       - /opt/docker/beszel/socket:/beszel_socket
-    # LAN-only access for initial setup and local fallback.
-    ports:
-      - "${LAN_IP:-127.0.0.1}:8090:8090"
     networks: [beszel_network]
     restart: unless-stopped
     healthcheck:
