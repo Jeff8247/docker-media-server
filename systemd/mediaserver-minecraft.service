@@ -1,0 +1,9 @@
+[Unit]
+Description=Start or stop the Minecraft servers for the daily schedule
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/mediaserver-minecraft-schedule
+TimeoutStartSec=5min

@@ -45,7 +45,12 @@ install -o root -g root -m 0755 \
   /usr/local/sbin/mediaserver-update
 install -m 0644 "$project_dir/systemd/mediaserver-update.timer" /etc/systemd/system/mediaserver-update.timer
 install -m 0644 "$project_dir/systemd/mediaserver-traefik.logrotate" /etc/logrotate.d/mediaserver-traefik
+install -o root -g root -m 0755 \
+  "$project_dir/scripts/minecraft-schedule.sh" \
+  /usr/local/sbin/mediaserver-minecraft-schedule
+install -m 0644 "$project_dir/systemd/mediaserver-minecraft.service" /etc/systemd/system/mediaserver-minecraft.service
+install -m 0644 "$project_dir/systemd/mediaserver-minecraft.timer" /etc/systemd/system/mediaserver-minecraft.timer
 
 systemctl daemon-reload
-systemctl enable --now mediaserver-update.timer
-systemctl list-timers mediaserver-update.timer --no-pager
+systemctl enable --now mediaserver-update.timer mediaserver-minecraft.timer
+systemctl list-timers mediaserver-update.timer mediaserver-minecraft.timer --no-pager

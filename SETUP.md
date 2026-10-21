@@ -242,7 +242,7 @@ Traefik log rotation:
 
 ```bash
 sudo ./scripts/install-host-hardening.sh
-systemctl list-timers mediaserver-update.timer
+systemctl list-timers mediaserver-update.timer mediaserver-minecraft.timer
 ```
 
 Re-run this installer after moving the checkout or changing the updater; the

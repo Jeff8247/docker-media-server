@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Minecraft servers 09:00-19:00 daily
+
+[Timer]
+OnCalendar=*-*-* 09:00:00
+OnCalendar=*-*-* 19:00:00
+OnBootSec=3min
+Unit=mediaserver-minecraft.service
+
+[Install]
+WantedBy=timers.target

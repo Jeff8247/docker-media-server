@@ -59,4 +59,9 @@ if [[ -n "$before_gluetun_container" && "$before_gluetun_container" != "$after_g
   docker compose up -d --force-recreate qbittorrent
 fi
 
+# `up -d` starts stopped services; reapply the Minecraft schedule afterwards.
+if [[ -x /usr/local/sbin/mediaserver-minecraft-schedule ]]; then
+  /usr/local/sbin/mediaserver-minecraft-schedule
+fi
+
 docker compose ps
