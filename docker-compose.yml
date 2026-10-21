@@ -1,4 +1,8 @@
 ---
+x-logging: &default-logging
+  driver: local
+  options: {max-size: 10m, max-file: "3"}
+
 services:
   traefik:
     image: traefik:v3.7
@@ -39,6 +43,7 @@ services:
       beszel_network:
       wireguard_network:
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/ping || exit 1"]
       interval: 30s
@@ -62,6 +67,7 @@ services:
       traefik:
         condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
     deploy:
       resources:
         limits: {memory: 128M, cpus: "0.5"}
@@ -86,6 +92,7 @@ services:
       - /opt/docker/gluetun:/gluetun
     networks: [downloads_network]
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:9999 || exit 1"]
       interval: 10s
@@ -115,6 +122,7 @@ services:
       gluetun:
         condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/v2/app/version >/dev/null || exit 1"]
       interval: 30s
@@ -137,13 +145,16 @@ services:
     volumes:
       - /opt/docker/plex:/config
       - ${ROOT_MEDIA_DIR}:/data:ro
-      - ${ROOT_MEDIA_DIR}/transcode:/transcode
+      - type: tmpfs
+        target: /transcode
+        tmpfs: {size: 2147483648}
     devices:
       - /dev/dri/renderD128:/dev/dri/renderD128
     ports:
       - "32400:32400"
     networks: [plex_network, plex_monitoring_network]
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:32400/identity >/dev/null || exit 1"]
       interval: 30s
@@ -166,6 +177,7 @@ services:
       - /opt/docker/tautulli:/config
     networks: [tautulli_network, plex_monitoring_network]
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8181/status || exit 1"]
       interval: 30s
@@ -186,6 +198,7 @@ services:
       - /opt/docker/beszel/socket:/beszel_socket
     networks: [beszel_network]
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "/beszel", "health", "--url", "http://localhost:8090"]
       interval: 120s
@@ -200,15 +213,17 @@ services:
     image: henrygd/beszel-agent:latest
     container_name: beszel-agent
     network_mode: host
+    depends_on: [docker-socket-proxy]
     environment:
       - LISTEN=/beszel_socket/beszel.sock
       - KEY=${BESZEL_AGENT_KEY:-}
       - TOKEN=${BESZEL_AGENT_TOKEN:-}
+      - DOCKER_HOST=tcp://127.0.0.1:2375
     volumes:
       - /opt/docker/beszel/agent:/var/lib/beszel-agent
       - /opt/docker/beszel/socket:/beszel_socket
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "/agent", "health"]
       interval: 120s
@@ -218,6 +233,28 @@ services:
     deploy:
       resources:
         limits: {memory: 128M, cpus: "0.5"}
+
+  # Read-only, container-listing-only view of the Docker API for beszel-agent.
+  docker-socket-proxy:
+    image: lscr.io/linuxserver/socket-proxy:latest
+    container_name: docker-socket-proxy
+    environment:
+      - CONTAINERS=1
+      - INFO=1
+      - POST=0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "127.0.0.1:2375:2375"
+    networks: [beszel_proxy_network]
+    read_only: true
+    tmpfs: [/run]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    logging: *default-logging
+    deploy:
+      resources:
+        limits: {memory: 64M, cpus: "0.25"}
 
   wg-easy:
     image: ghcr.io/wg-easy/wg-easy:15
@@ -235,6 +272,7 @@ services:
       - net.ipv4.ip_forward=1
     networks: [wireguard_network]
     restart: unless-stopped
+    logging: *default-logging
     deploy:
       resources:
         limits: {memory: 128M, cpus: "0.5"}
@@ -250,6 +288,7 @@ services:
     volumes: [/opt/docker/prowlarr:/config]
     networks: [prowlarr_network, indexer_network]
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:9696/ping || exit 1"]
       interval: 30s
@@ -273,6 +312,7 @@ services:
       - ${ROOT_MEDIA_DIR}:/data
     networks: [downloads_network, indexer_network, subtitles_network, plex_network]
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8989/ping || exit 1"]
       interval: 30s
@@ -296,6 +336,7 @@ services:
       - ${ROOT_MEDIA_DIR}:/data
     networks: [downloads_network, indexer_network, subtitles_network, plex_network]
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:7878/ping || exit 1"]
       interval: 30s
@@ -319,6 +360,7 @@ services:
       - ${ROOT_MEDIA_DIR}:/data
     networks: [downloads_network, indexer_network, plex_network]
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8686/ping || exit 1"]
       interval: 30s
@@ -342,6 +384,7 @@ services:
       - ${ROOT_MEDIA_DIR}:/data
     networks: [bazarr_network, subtitles_network]
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:6767/ || exit 1"]
       interval: 30s
@@ -368,6 +411,7 @@ services:
       - "${LAN_IP:-127.0.0.1}:25565:25565"
     networks: [minecraft_survival_network]
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: mc-health
       interval: 30s
@@ -394,6 +438,7 @@ services:
       - "${LAN_IP:-127.0.0.1}:25566:25565"
     networks: [minecraft_creative_network]
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: mc-health
       interval: 30s
@@ -511,6 +556,7 @@ networks:
   plex_network: {driver: bridge}
   tautulli_network: {driver: bridge}
   beszel_network: {driver: bridge}
+  beszel_proxy_network: {driver: bridge}
   plex_monitoring_network: {driver: bridge, internal: true}
   wireguard_network: {driver: bridge}
   minecraft_survival_network: {driver: bridge}

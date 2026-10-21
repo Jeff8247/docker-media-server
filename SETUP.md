@@ -69,6 +69,15 @@ sudo systemctl enable --now docker.service containerd.service
 sudo usermod -aG docker "$USER"
 ```
 
+Configure global log rotation so no container's logs grow unbounded, then
+restart Docker (containers created afterwards inherit it; this stack's compose
+file also sets it per service):
+
+```bash
+echo '{"log-driver":"local","log-opts":{"max-size":"10m","max-file":"3"}}' | sudo tee /etc/docker/daemon.json
+sudo systemctl restart docker
+```
+
 The `docker` group grants root-equivalent access. Log out fully and back in,
 then verify and clone the repository at the path expected by the updater:
 
@@ -149,17 +158,16 @@ The active `ROOT_MEDIA_DIR` is `/mnt/media/plex` and expects:
 ├── Audio/
 ├── Movies/
 ├── TV/
-├── downloads/
-│   ├── complete/
-│   └── incomplete/
-└── transcode/
+└── downloads/
+    ├── complete/
+    └── incomplete/
 ```
 
 After mounting, create only missing empty directories:
 
 ```bash
 sudo install -d -o 1000 -g 1000 -m 0775 \
-  /mnt/media/plex/{Audio,Movies,TV,downloads/complete,downloads/incomplete,transcode}
+  /mnt/media/plex/{Audio,Movies,TV,downloads/complete,downloads/incomplete}
 ```
 
 ## 3. Restore secrets and application state
