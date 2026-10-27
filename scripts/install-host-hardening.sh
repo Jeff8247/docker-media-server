@@ -14,6 +14,7 @@ install -d -m 0700 /opt/docker/wg-easy-v15
 for path in \
   /opt/docker/bazarr \
   /opt/docker/lidarr \
+  /opt/docker/metube \
   /opt/docker/prowlarr \
   /opt/docker/qbittorrent \
   /opt/docker/radarr \

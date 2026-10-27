@@ -54,9 +54,9 @@ docker compose up -d --remove-orphans --wait --wait-timeout 300
 after_gluetun_container="$(docker inspect --format '{{.Id}}' gluetun 2>/dev/null || true)"
 if [[ -n "$before_gluetun_container" && "$before_gluetun_container" != "$after_gluetun_container" ]]; then
   # network_mode: service:gluetun keeps the old namespace unless qBittorrent
-  # is explicitly recreated after the Gluetun container is replaced. Compare
+  # and MeTube are explicitly recreated after the Gluetun container is replaced. Compare
   # container IDs rather than image IDs so config-only recreations are covered.
-  docker compose up -d --force-recreate qbittorrent
+  docker compose up -d --force-recreate qbittorrent metube
 fi
 
 # `up -d` starts stopped services; reapply the Minecraft schedule afterwards.

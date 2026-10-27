@@ -85,7 +85,7 @@ services:
       - VPN_PORT_FORWARDING=on
       - PORT_FORWARD_ONLY=on
       - TZ=${TZ}
-      - FIREWALL_INPUT_PORTS=8080
+      - FIREWALL_INPUT_PORTS=8080,8081
       - VPN_PORT_FORWARDING_UP_COMMAND=/bin/sh -c 'wget -O- -nv --retry-connrefused --post-data "json={\"listen_port\":{{PORT}},\"current_network_interface\":\"{{VPN_INTERFACE}}\",\"random_port\":false,\"upnp\":false}" http://127.0.0.1:8080/api/v2/app/setPreferences'
       - VPN_PORT_FORWARDING_DOWN_COMMAND=/bin/sh -c 'wget -O- -nv --retry-connrefused --post-data "json={\"listen_port\":0,\"current_network_interface\":\"lo\"}" http://127.0.0.1:8080/api/v2/app/setPreferences'
     volumes:
@@ -132,6 +132,34 @@ services:
     deploy:
       resources:
         limits: {memory: 1G, cpus: "2"}
+
+  metube:
+    image: ghcr.io/alexta69/metube:latest
+    container_name: metube
+    user: "${PUID}:${PGID}"
+    environment:
+      - TZ=${TZ}
+      - UMASK=077
+      - DOWNLOAD_DIR=/downloads
+      - STATE_DIR=/config
+    volumes:
+      - /opt/docker/metube:/config
+      - ${ROOT_MEDIA_DIR}/Audio/YouTube:/downloads
+    network_mode: service:gluetun
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/', timeout=5)\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits: {memory: 512M, cpus: "1"}
 
   plex:
     image: lscr.io/linuxserver/plex:latest
@@ -505,6 +533,12 @@ configs:
             service: qbittorrent
             middlewares: [security-headers, local-access]
             tls: {certResolver: myresolver}
+          metube:
+            rule: "Host(`metube.${DOMAIN}`)"
+            entryPoints: [websecure]
+            service: metube
+            middlewares: [security-headers, local-access]
+            tls: {certResolver: myresolver}
           plex:
             rule: "Host(`plex.${DOMAIN}`)"
             entryPoints: [websecure]
@@ -541,6 +575,7 @@ configs:
           lidarr: {loadBalancer: {servers: [{url: "http://lidarr:8686"}]}}
           bazarr: {loadBalancer: {servers: [{url: "http://bazarr:6767"}]}}
           qbittorrent: {loadBalancer: {servers: [{url: "http://gluetun:8080"}]}}
+          metube: {loadBalancer: {servers: [{url: "http://gluetun:8081"}]}}
           plex: {loadBalancer: {servers: [{url: "http://plex:32400"}]}}
 
 networks:

@@ -167,7 +167,7 @@ After mounting, create only missing empty directories:
 
 ```bash
 sudo install -d -o 1000 -g 1000 -m 0775 \
-  /mnt/media/plex/{Audio,Movies,TV,downloads/complete,downloads/incomplete}
+  /mnt/media/plex/{Audio/YouTube,Movies,TV,downloads/complete,downloads/incomplete}
 ```
 
 ## 3. Restore secrets and application state
@@ -231,8 +231,8 @@ Plex `devices` mapping before deployment and accept software transcoding.
 For a new installation without restored application state:
 
 ```bash
-sudo mkdir -p /opt/docker/{traefik/letsencrypt,traefik/logs,gluetun,plex,tautulli,qbittorrent,prowlarr,sonarr,radarr,lidarr,bazarr,minecraft-survival,minecraft-creative,wg-easy-v15}
-sudo chown -R 1000:1000 /opt/docker/traefik /opt/docker/plex /opt/docker/tautulli /opt/docker/qbittorrent /opt/docker/prowlarr /opt/docker/sonarr /opt/docker/radarr /opt/docker/lidarr /opt/docker/bazarr /opt/docker/minecraft-survival /opt/docker/minecraft-creative
+sudo mkdir -p /opt/docker/{traefik/letsencrypt,traefik/logs,gluetun,plex,tautulli,qbittorrent,metube,prowlarr,sonarr,radarr,lidarr,bazarr,minecraft-survival,minecraft-creative,wg-easy-v15}
+sudo chown -R 1000:1000 /opt/docker/traefik /opt/docker/plex /opt/docker/tautulli /opt/docker/qbittorrent /opt/docker/metube /opt/docker/prowlarr /opt/docker/sonarr /opt/docker/radarr /opt/docker/lidarr /opt/docker/bazarr /opt/docker/minecraft-survival /opt/docker/minecraft-creative
 sudo chmod 700 /opt/docker/wg-easy-v15
 ```
 
@@ -250,9 +250,9 @@ systemd unit embeds the project path and the updater is copied root-owned.
 
 ## 5. Configure DNS, Cloudflare, firewall, and router
 
-Reserve `LAN_IP` in DHCP. Configure local DNS so `plex.${DOMAIN}` and
-`qbittorrent.${DOMAIN}` resolve directly to `LAN_IP`; public DNS must not expose
-qBittorrent.
+Reserve `LAN_IP` in DHCP. Configure local DNS so `plex.${DOMAIN}`,
+`qbittorrent.${DOMAIN}`, and `metube.${DOMAIN}` resolve directly to `LAN_IP`; public DNS must not expose
+qBittorrent or MeTube.
 
 Create Cloudflare Tunnel hostnames pointing to `http://traefik:80` for:
 
@@ -267,7 +267,7 @@ Create Cloudflare Tunnel hostnames pointing to `http://traefik:80` for:
 | `prowlarr.${DOMAIN}` |
 | `wireguard.${DOMAIN}` |
 
-Do not create Tunnel routes for Plex or qBittorrent. For each listed hostname:
+Do not create Tunnel routes for Plex, qBittorrent, or MeTube. For each listed hostname:
 
 1. Attach an Access application and allow policy for intended identities.
 2. Enable **Protect with Access** in the Tunnel route and select that audience.
@@ -307,6 +307,14 @@ start so the initialization script can harden the newly generated file:
 docker compose up -d --force-recreate qbittorrent
 ```
 
+Traefik's routes live in the `traefik_dynamic` config in `docker-compose.yml`,
+and `docker compose up -d` does not recreate Traefik when that config changes.
+After adding or editing a router or service, apply it explicitly:
+
+```bash
+docker compose up -d --force-recreate traefik
+```
+
 ## 7. Restore or configure applications
 
 Restored `/opt/docker` state should retain accounts, API keys, paths, Plex
@@ -342,6 +350,7 @@ docker compose exec traefik traefik version
 docker compose ps
 docker compose exec gluetun wget -qO- https://ipinfo.io/ip
 docker compose exec qbittorrent wget -qO- https://ipinfo.io/ip
+docker compose exec metube python3 -c "import urllib.request; print(urllib.request.urlopen('https://ipinfo.io/ip').read().decode())"
 docker exec wg-easy wg show
 systemctl status mediaserver-update.timer --no-pager
 ```
@@ -353,10 +362,10 @@ Confirm:
 - Traefik is at least 3.7.13 and has no Docker socket mount;
 - unauthenticated tunneled requests are rejected by Cloudflare Access;
 - TCP 80 is unreachable from the LAN and internet;
-- local DNS directs Plex and qBittorrent to `LAN_IP`;
+- local DNS directs Plex, qBittorrent, and MeTube to `LAN_IP`;
 - qBittorrent is LAN-only and its port matches
   `/tmp/gluetun/forwarded_port` after PIA connects;
-- stopping Gluetun prevents qBittorrent internet access;
+- stopping Gluetun prevents qBittorrent and MeTube internet access;
 - Plex remote access and hardware transcoding work;
 - every arr application and Tautulli can reach its dependencies;
 - Minecraft works over LAN/WireGuard but not an external port scan;
