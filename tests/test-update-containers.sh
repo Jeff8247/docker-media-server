@@ -50,10 +50,10 @@ export MOCK_REPLACE_GLUETUN=1
 export UPDATE_LOCK_FILE="$replacement_state/update.lock"
 PATH="$repo_dir/tests/fixtures/update-bin:$PATH" "$script" >"$replacement_state/output" 2>&1
 if [[ "$(wc -l <"$replacement_state/compose-up-calls")" -eq 2 ]] &&
-   tail -n 1 "$replacement_state/compose-up-calls" | grep -q -- '--force-recreate qbittorrent metube'; then
-  echo 'PASS: replaced Gluetun recreates qBittorrent and MeTube'
+   tail -n 1 "$replacement_state/compose-up-calls" | grep -q -- '--force-recreate qbittorrent'; then
+  echo 'PASS: replaced Gluetun recreates qBittorrent'
 else
-  echo 'FAIL: replaced Gluetun did not recreate qBittorrent and MeTube'
+  echo 'FAIL: replaced Gluetun did not recreate qBittorrent'
   failures=$((failures + 1))
 fi
 

@@ -85,7 +85,7 @@ services:
       - VPN_PORT_FORWARDING=on
       - PORT_FORWARD_ONLY=on
       - TZ=${TZ}
-      - FIREWALL_INPUT_PORTS=8080,8081
+      - FIREWALL_INPUT_PORTS=8080
       - VPN_PORT_FORWARDING_UP_COMMAND=/bin/sh -c 'wget -O- -nv --retry-connrefused --post-data "json={\"listen_port\":{{PORT}},\"current_network_interface\":\"{{VPN_INTERFACE}}\",\"random_port\":false,\"upnp\":false}" http://127.0.0.1:8080/api/v2/app/setPreferences'
       - VPN_PORT_FORWARDING_DOWN_COMMAND=/bin/sh -c 'wget -O- -nv --retry-connrefused --post-data "json={\"listen_port\":0,\"current_network_interface\":\"lo\"}" http://127.0.0.1:8080/api/v2/app/setPreferences'
     volumes:
@@ -145,10 +145,7 @@ services:
     volumes:
       - /opt/docker/metube:/config
       - ${ROOT_MEDIA_DIR}/Audio/YouTube:/downloads
-    network_mode: service:gluetun
-    depends_on:
-      gluetun:
-        condition: service_healthy
+    networks: [downloads_network]
     restart: unless-stopped
     logging: *default-logging
     healthcheck:
@@ -575,7 +572,7 @@ configs:
           lidarr: {loadBalancer: {servers: [{url: "http://lidarr:8686"}]}}
           bazarr: {loadBalancer: {servers: [{url: "http://bazarr:6767"}]}}
           qbittorrent: {loadBalancer: {servers: [{url: "http://gluetun:8080"}]}}
-          metube: {loadBalancer: {servers: [{url: "http://gluetun:8081"}]}}
+          metube: {loadBalancer: {servers: [{url: "http://metube:8081"}]}}
           plex: {loadBalancer: {servers: [{url: "http://plex:32400"}]}}
 
 networks:

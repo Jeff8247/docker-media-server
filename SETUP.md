@@ -350,7 +350,6 @@ docker compose exec traefik traefik version
 docker compose ps
 docker compose exec gluetun wget -qO- https://ipinfo.io/ip
 docker compose exec qbittorrent wget -qO- https://ipinfo.io/ip
-docker compose exec metube python3 -c "import urllib.request; print(urllib.request.urlopen('https://ipinfo.io/ip').read().decode())"
 docker exec wg-easy wg show
 systemctl status mediaserver-update.timer --no-pager
 ```
@@ -365,7 +364,7 @@ Confirm:
 - local DNS directs Plex, qBittorrent, and MeTube to `LAN_IP`;
 - qBittorrent is LAN-only and its port matches
   `/tmp/gluetun/forwarded_port` after PIA connects;
-- stopping Gluetun prevents qBittorrent and MeTube internet access;
+- stopping Gluetun prevents qBittorrent internet access;
 - Plex remote access and hardware transcoding work;
 - every arr application and Tautulli can reach its dependencies;
 - Minecraft works over LAN/WireGuard but not an external port scan;
